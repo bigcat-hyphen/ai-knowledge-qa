@@ -1,0 +1,19 @@
+services:
+  ai-kb:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - MIMO_BASE_URL=${MIMO_BASE_URL:-}
+      - MIMO_MODEL=${MIMO_MODEL:-}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+    restart: unless-stopped

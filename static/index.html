@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Knowledge Base Q&A</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f5f5f5; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #1a1a2e; color: #fff; }
+.topbar h1 { font-size: 16px; font-weight: 600; }
+.topbar button { background: none; border: 1px solid #555; color: #fff; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.topbar button:hover { background: #333; }
+
+.main { display: flex; flex: 1; overflow: hidden; }
+
+.sidebar { width: 280px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+.sidebar-header { padding: 12px; border-bottom: 1px solid #eee; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+.doc-list { flex: 1; overflow-y: auto; padding: 8px; }
+.doc-item { padding: 8px 10px; border-radius: 6px; margin-bottom: 4px; background: #f9f9f9; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.doc-item .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-item .doc-meta { color: #888; font-size: 11px; margin-left: 8px; white-space: nowrap; }
+.doc-item .del-btn { background: none; border: none; color: #c00; cursor: pointer; font-size: 16px; padding: 0 4px; margin-left: 4px; }
+.doc-item .del-btn:hover { color: #f00; }
+
+.upload-area { padding: 12px; border-top: 1px solid #eee; }
+.upload-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 16px; text-align: center; color: #888; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+.upload-zone:hover, .upload-zone.dragover { border-color: #4a90d9; color: #4a90d9; background: #f0f7ff; }
+.upload-zone input { display: none; }
+
+.progress-wrap { display: none; padding: 8px 12px; }
+.progress-bar { height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: #4a90d9; border-radius: 3px; transition: width 0.2s; }
+.progress-text { font-size: 11px; color: #888; margin-top: 4px; text-align: center; }
+
+.chat-area { flex: 1; display: flex; flex-direction: column; }
+.messages { flex: 1; overflow-y: auto; padding: 16px; }
+.msg { margin-bottom: 12px; max-width: 80%; }
+.msg.user { margin-left: auto; }
+.msg .bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.msg.user .bubble { background: #4a90d9; color: #fff; border-bottom-right-radius: 4px; }
+.msg.assistant .bubble { background: #fff; color: #333; border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
+.msg .sources { font-size: 11px; color: #888; margin-top: 4px; padding: 0 14px; }
+.msg .sources span { background: #f0f0f0; padding: 1px 6px; border-radius: 3px; margin-right: 4px; }
+
+.input-area { padding: 12px 16px; border-top: 1px solid #eee; background: #fff; display: flex; gap: 8px; }
+.input-area textarea { flex: 1; resize: none; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 14px; font-family: inherit; outline: none; }
+.input-area textarea:focus { border-color: #4a90d9; }
+.input-area button { background: #4a90d9; color: #fff; border: none; border-radius: 8px; padding: 0 20px; font-size: 14px; cursor: pointer; }
+.input-area button:hover { background: #357abd; }
+.input-area button:disabled { background: #ccc; cursor: not-allowed; }
+
+.welcome { text-align: center; color: #888; margin-top: 30%; font-size: 14px; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: #fff; border-radius: 12px; padding: 24px; width: 420px; max-width: 90vw; }
+.modal h2 { font-size: 18px; margin-bottom: 16px; }
+.modal label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #555; }
+.modal input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 12px; outline: none; }
+.modal input:focus { border-color: #4a90d9; }
+.modal .btn-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.modal .btn-row button { padding: 8px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; border: none; }
+.modal .btn-cancel { background: #eee; color: #333; }
+.modal .btn-save { background: #4a90d9; color: #fff; }
+.modal .privacy-note { font-size: 12px; color: #888; background: #fff8e1; padding: 10px; border-radius: 6px; margin-bottom: 12px; line-height: 1.5; }
+.modal .endpoint-display { font-size: 12px; color: #666; background: #f5f5f5; padding: 8px; border-radius: 4px; margin-bottom: 12px; word-break: break-all; }
+
+.toast { position: fixed; top: 20px; right: 20px; padding: 10px 20px; border-radius: 8px; color: #fff; font-size: 14px; z-index: 200; animation: fadeInOut 2s; }
+.toast.success { background: #4caf50; }
+.toast.error { background: #f44336; }
+@keyframes fadeInOut { 0% { opacity: 0; transform: translateY(-10px); } 10% { opacity: 1; transform: translateY(0); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+.footer-bar { padding: 4px 16px; background: #f9f9f9; border-top: 1px solid #eee; font-size: 11px; color: #aaa; text-align: center; }
+
+.session-panel { width: 240px; background: #fafafa; border-right: 1px solid #eee; display: flex; flex-direction: column; }
+.session-header { padding: 12px; border-bottom: 1px solid #eee; font-weight: 600; font-size: 14px; }
+.session-list { flex: 1; overflow-y: auto; padding: 8px; }
+.session-item { padding: 8px 10px; border-radius: 6px; margin-bottom: 4px; cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.session-item:hover { background: #eee; }
+.session-item.active { background: #e3f0ff; border: 1px solid #4a90d9; }
+.session-item .session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-item .session-del { background: none; border: none; color: #c00; cursor: pointer; font-size: 14px; padding: 0 4px; margin-left: 4px; opacity: 0; transition: opacity 0.2s; }
+.session-item:hover .session-del { opacity: 1; }
+
+.copy-btn { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.06); border: none; border-radius: 4px; padding: 2px 6px; font-size: 12px; cursor: pointer; opacity: 0; transition: opacity 0.2s; color: #666; }
+.msg:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { background: rgba(0,0,0,0.12); }
+
+.msg .bubble { position: relative; }
+
+.typing-indicator { display: inline-flex; gap: 4px; padding: 4px 0; }
+.typing-indicator span { width: 6px; height: 6px; background: #999; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
+.typing-indicator span:nth-child(1) { animation-delay: 0s; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,80%,100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+
+.msg.assistant .bubble { line-height: 1.6; }
+.msg.assistant .bubble p { margin: 0 0 0.5em; }
+.msg.assistant .bubble p:last-child { margin-bottom: 0; }
+.msg.assistant .bubble pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; margin: 8px 0; font-size: 13px; }
+.msg.assistant .bubble code { font-family: Consolas, Monaco, monospace; font-size: 13px; }
+.msg.assistant .bubble :not(pre) > code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
+.msg.assistant .bubble ul, .msg.assistant .bubble ol { padding-left: 1.5em; margin: 4px 0; }
+.msg.assistant .bubble blockquote { border-left: 3px solid #ddd; padding-left: 12px; color: #666; margin: 8px 0; }
+.msg.assistant .bubble table { border-collapse: collapse; margin: 8px 0; }
+.msg.assistant .bubble th, .msg.assistant .bubble td { border: 1px solid #ddd; padding: 4px 8px; font-size: 13px; }
+.msg.assistant .bubble th { background: #f5f5f5; }
+
+.menu-toggle { display: none; background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 8px; }
+
+@media (max-width: 768px) {
+  .menu-toggle { display: block; }
+  .session-panel { display: none; position: fixed; left: 0; top: 0; bottom: 0; z-index: 50; box-shadow: 2px 0 8px rgba(0,0,0,0.15); }
+  .session-panel.open { display: flex; }
+  .sidebar { display: none; position: fixed; left: 0; top: 40px; bottom: 0; z-index: 49; box-shadow: 2px 0 8px rgba(0,0,0,0.15); }
+  .sidebar.open { display: flex; }
+  .main { flex-direction: column; }
+  .msg { max-width: 95%; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1 data-i18n="title">AI Knowledge Base Q&A</h1>
+  <div>
+    <button class="menu-toggle" onclick="toggleSessionPanel()">&#9776;</button>
+    <button onclick="toggleLang()" id="lang-btn">EN</button>
+    <button onclick="showConfig()" data-i18n="settings">Settings</button>
+    <button onclick="newChat()" style="margin-left:4px;" data-i18n="newChat">New Chat</button>
+    <button onclick="event.shiftKey?exportChat('json'):exportChat('md')" style="margin-left:4px;" data-i18n="export" title="Shift+Click for JSON">Export</button>
+    <button onclick="clearAllData()" style="margin-left:4px;" data-i18n="clearAll">Clear All Data</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="session-panel" id="session-panel">
+    <div class="session-header" data-i18n="sessions">Sessions</div>
+    <div class="session-list" id="session-list"></div>
+  </div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span data-i18n="documents">Documents</span>
+      <span id="doc-count" style="color:#888;font-weight:400;font-size:12px;"></span>
+    </div>
+    <div style="padding:6px 12px;">
+      <input type="text" id="doc-search" placeholder="Search documents..." data-i18n-placeholder="searchPlaceholder" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;outline:none;" oninput="handleDocSearch(this.value)">
+    </div>
+    <div class="doc-list" id="doc-list"></div>
+    <div class="upload-area">
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+        <div data-i18n="dropHint">Drop file here or click to upload</div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;" data-i18n="fileType">Supports .txt, .pdf (max 50MB)</div>
+        <input type="file" id="file-input" accept=".txt,.pdf,.docx,.md,.csv" multiple onchange="handleFiles(this.files)">
+      </div>
+      <div class="progress-wrap" id="progress-wrap" style="position:relative;">
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="progress-text" id="progress-text"></div>
+        <button id="upload-cancel" onclick="cancelUpload()" style="position:absolute;right:4px;top:2px;background:none;border:none;font-size:14px;cursor:pointer;color:#888;" title="Cancel">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-area">
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcome">
+        <div style="font-size:36px;margin-bottom:12px;">&#128218;</div>
+        <div data-i18n="welcomeTitle">Upload documents, then ask questions</div>
+        <div style="font-size:12px;margin-top:8px;color:#aaa;" data-i18n="welcomeNote">
+          Your questions and document snippets will be sent to the configured LLM API.<br>
+          All data is stored locally on your machine.
+        </div>
+      </div>
+    </div>
+    <div class="input-area">
+      <textarea id="question-input" rows="1" data-i18n-placeholder="askPlaceholder" placeholder="Ask a question..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();askQuestion();}"></textarea>
+      <button id="ask-btn" onclick="askQuestion()" data-i18n="send">Send</button>
+    </div>
+  </div>
+</div>
+
+<div class="footer-bar" data-i18n="footer">
+  Questions and document snippets are sent to the configured LLM API. All data stored locally.
+</div>
+
+<div class="modal-overlay" id="preview-modal" style="display:none;">
+  <div class="modal" style="width:640px;max-height:80vh;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 id="preview-title" style="font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin:0;"></h2>
+      <button onclick="hidePreview()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:0 4px;">&times;</button>
+    </div>
+    <div id="preview-content" style="flex:1;overflow-y:auto;background:#f5f5f5;padding:12px;border-radius:6px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;font-family:monospace;"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="config-modal" style="display:none;">
+  <div class="modal">
+    <h2 data-i18n="configTitle">Model Configuration</h2>
+    <div class="privacy-note" data-i18n="privacyNote">
+      Your questions and retrieved document snippets will be sent to the LLM API endpoint you configure below.
+      No data is stored on external servers. All embeddings and documents remain on your local machine.
+    </div>
+    <label data-i18n="baseUrl">API Base URL</label>
+    <input id="cfg-base-url" placeholder="https://token-plan-cn.xiaomimimo.com/v1">
+    <label data-i18n="apiKey">API Key</label>
+    <input id="cfg-api-key" type="password" placeholder="your-api-key">
+    <label data-i18n="modelName">Model Name</label>
+    <input id="cfg-model" placeholder="mimo-v2.5-pro">
+    <label data-i18n="embedModel">Embedding Model (optional)</label>
+    <input id="cfg-embed-model" placeholder="text-embedding-3-small">
+    <div class="endpoint-display" id="cfg-endpoint" style="display:none;"></div>
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="hideConfig()" data-i18n="cancel">Cancel</button>
+      <button class="btn-save" onclick="saveConfig()" data-i18n="save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+const i18n = {
+  zh: {
+    title: 'AI 知识库问答助手',
+    settings: '设置',
+    clearAll: '清除所有数据',
+    documents: '文档',
+    dropHint: '拖放文件到此处或点击上传',
+    fileType: '支持 .txt, .pdf, .docx, .md, .csv (最大 50MB)',
+    welcomeTitle: '上传文档，然后开始提问',
+    welcomeNote: '您的提问和检索到的文档片段会发送到配置的 LLM API。<br>所有数据仅存储在本机。',
+    askPlaceholder: '输入问题...',
+    send: '发送',
+    footer: '提问和文档片段会发送到配置的 LLM API。所有数据存储在本机。',
+    configTitle: '模型配置',
+    privacyNote: '您的提问和检索到的文档片段将发送到下方配置的 LLM API 端点。数据不会存储在外部服务器，所有向量和文档保留在本机。',
+    baseUrl: 'API 基础地址',
+    apiKey: 'API 密钥',
+    modelName: '模型名称',
+    embedModel: '嵌入模型（可选）',
+    cancel: '取消',
+    save: '保存',
+    allFieldsRequired: '请填写所有字段',
+    configSaved: '配置已保存',
+    configFailed: '保存配置失败',
+    noDocs: '暂无文档',
+    chunks: '个分块',
+    deleteConfirm: '确定删除此文档及其向量数据？',
+    docDeleted: '文档已删除',
+    clearAllConfirm: '确定删除所有文档、向量和对话历史？',
+    allCleared: '所有数据已清除',
+    uploading: '正在上传...',
+    uploaded: '已上传',
+    uploadFailed: '上传失败',
+    uploadError: '上传错误',
+    onlyTxtPdf: '仅支持 .txt, .pdf, .docx, .md, .csv 文件',
+    sources: '来源',
+    notConfigured: '请先配置模型',
+    newChat: '新对话',
+    apiError: 'API 错误',
+    chunksUnit: '个分块',
+    docsUnit: '个文档',
+    uploadProgress: '上传中',
+    processing: '处理中',
+    parsing: '解析中...',
+    chunking: '切块中...',
+    embedding: '向量化中...',
+    ocr: 'OCR 识别中...',
+    uploadDone: '上传完成',
+    loading: '加载中...',
+    docPreview: '文档预览',
+    uploadTimeout: '上传超时（处理时间超过10分钟）',
+    cancel: '取消',
+    export: '导出',
+    searchPlaceholder: '搜索文档...',
+    sessions: '会话',
+    noSessions: '暂无会话',
+    sessionDeleted: '会话已删除'
+  },
+  en: {
+    title: 'AI Knowledge Base Q&A',
+    settings: 'Settings',
+    clearAll: 'Clear All Data',
+    documents: 'Documents',
+    dropHint: 'Drop file here or click to upload',
+    fileType: 'Supports .txt, .pdf, .docx, .md, .csv (max 50MB)',
+    welcomeTitle: 'Upload documents, then ask questions',
+    welcomeNote: 'Your questions and document snippets will be sent to the configured LLM API.<br>All data is stored locally on your machine.',
+    askPlaceholder: 'Ask a question...',
+    send: 'Send',
+    footer: 'Questions and document snippets are sent to the configured LLM API. All data stored locally.',
+    configTitle: 'Model Configuration',
+    privacyNote: 'Your questions and retrieved document snippets will be sent to the LLM API endpoint you configure below. No data is stored on external servers. All embeddings and documents remain on your local machine.',
+    baseUrl: 'API Base URL',
+    apiKey: 'API Key',
+    modelName: 'Model Name',
+    embedModel: 'Embedding Model (optional)',
+    cancel: 'Cancel',
+    save: 'Save',
+    allFieldsRequired: 'All fields required',
+    configSaved: 'Config saved',
+    configFailed: 'Failed to save config',
+    noDocs: 'No documents uploaded',
+    chunks: 'chunks',
+    deleteConfirm: 'Delete this document and its vectors?',
+    docDeleted: 'Document deleted',
+    clearAllConfirm: 'Delete ALL documents, vectors, and conversation history?',
+    allCleared: 'All data cleared',
+    uploading: 'Uploading...',
+    uploaded: 'Uploaded',
+    uploadFailed: 'Upload failed',
+    uploadError: 'Upload error',
+    onlyTxtPdf: 'Only .txt, .pdf, .docx, .md, .csv supported',
+    sources: 'Sources',
+    notConfigured: 'Model not configured',
+    newChat: 'New Chat',
+    apiError: 'Error',
+    chunksUnit: 'chunks',
+    docsUnit: 'documents',
+    uploadProgress: 'Uploading',
+    processing: 'Processing',
+    parsing: 'Parsing...',
+    chunking: 'Chunking...',
+    embedding: 'Embedding...',
+    ocr: 'OCR processing...',
+    uploadDone: 'Upload complete',
+    loading: 'Loading...',
+    docPreview: 'Document Preview',
+    uploadTimeout: 'Upload timed out (processing took over 10 minutes)',
+    cancel: 'Cancel',
+    export: 'Export',
+    searchPlaceholder: 'Search documents...',
+    sessions: 'Sessions',
+    noSessions: 'No sessions yet',
+    sessionDeleted: 'Session deleted'
+  }
+};
+
+let lang = localStorage.getItem('lang') || 'zh';
+
+function t(key) { return i18n[lang][key] || key; }
+
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.innerHTML = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.getElementById('lang-btn').textContent = lang === 'zh' ? 'EN' : '中文';
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+}
+
+function toggleLang() {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('lang', lang);
+  applyLang();
+  renderMessages();
+}
+
+let chatHistory = [];
+let isConfigured = false;
+let sessionId = localStorage.getItem('sessionId') || uuidv4();
+let uploadCancelled = false;
+
+function uuidv4() {
+  return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+async function saveConversation() {
+  if (!chatHistory.length) return;
+  try {
+    await fetch('/api/conversation', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ session_id: sessionId, messages: chatHistory })
+    });
+  } catch (e) {
+    console.error('Failed to save conversation:', e);
+  }
+}
+
+async function newChat() {
+  sessionId = uuidv4();
+  localStorage.setItem('sessionId', sessionId);
+  chatHistory = [];
+  renderMessages();
+  $('question-input').focus();
+}
+
+async function loadConversation() {
+  try {
+    const res = await fetch('/api/conversation?session_id=' + encodeURIComponent(sessionId));
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.messages && data.messages.length) {
+      chatHistory = data.messages;
+      renderMessages();
+    }
+    return;
+  } catch {}
+}
+
+const $ = id => document.getElementById(id);
+
+function showToast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2000);
+}
+
+async function checkConfig() {
+  const res = await fetch('/api/config');
+  const data = await res.json();
+  isConfigured = data.configured;
+  if (!isConfigured) showConfig();
+  else {
+    $('cfg-endpoint').style.display = 'block';
+    let info = 'API: ' + data.base_url + ' | Model: ' + data.model;
+    if (data.embed_model) info += ' | Embed: ' + data.embed_model;
+    $('cfg-endpoint').textContent = info;
+  }
+}
+
+function showConfig() { $('config-modal').style.display = 'flex'; }
+function hideConfig() { $('config-modal').style.display = 'none'; }
+
+async function saveConfig() {
+  const base_url = $('cfg-base-url').value.trim();
+  const api_key = $('cfg-api-key').value.trim();
+  const model = $('cfg-model').value.trim();
+  const embed_model = $('cfg-embed-model').value.trim();
+  if (!base_url || !api_key || !model) { showToast(t('allFieldsRequired'), 'error'); return; }
+  const body = { base_url, api_key, model };
+  if (embed_model) body.embed_model = embed_model;
+  const res = await fetch('/api/config', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (res.ok) {
+    isConfigured = true;
+    hideConfig();
+    showToast(t('configSaved'));
+    checkConfig();
+  } else {
+    showToast(t('configFailed'), 'error');
+  }
+}
+
+async function loadDocuments() {
+  const res = await fetch('/api/documents');
+  const data = await res.json();
+  const list = $('doc-list');
+  const docs = data.documents || [];
+  $('doc-count').textContent = docs.length ? docs.length + ' ' + t('docsUnit') : '';
+  if (!docs.length) {
+    list.innerHTML = `<div style="text-align:center;color:#aaa;padding:20px;font-size:13px;">${t('noDocs')}</div>`;
+    return;
+  }
+  renderDocList(docs);
+}
+
+function renderDocList(docs) {
+  const list = $('doc-list');
+  list.innerHTML = docs.map(d => `
+    <div class="doc-item">
+      <span class="doc-name" title="${escHtml(d.filename)}" onclick="previewDoc('${escHtml(d.id)}')" style="cursor:pointer;">${escHtml(d.filename)}</span>
+      <span class="doc-meta">${d.chunks} ${t('chunks')}</span>
+      <button class="del-btn" onclick="deleteDoc('${escHtml(d.id)}')" title="Delete">&times;</button>
+    </div>
+  `).join('');
+}
+
+let searchTimeout = null;
+function handleDocSearch(query) {
+  clearTimeout(searchTimeout);
+  if (!query.trim()) {
+    loadDocuments();
+    return;
+  }
+  searchTimeout = setTimeout(async () => {
+    const list = $('doc-list');
+    try {
+      const res = await fetch('/api/documents/search?q=' + encodeURIComponent(query));
+      const data = await res.json();
+      if (!data.results.length) {
+        list.innerHTML = `<div style="text-align:center;color:#aaa;padding:20px;font-size:13px;">${t('noDocs')}</div>`;
+        return;
+      }
+      list.innerHTML = data.results.map(r => `
+        <div class="doc-item" style="flex-wrap:wrap;">
+          <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+            <span class="doc-name" title="${escHtml(r.filename)}" onclick="previewDoc('${escHtml(r.doc_id)}')" style="cursor:pointer;">${escHtml(r.filename)}</span>
+            <button class="del-btn" onclick="deleteDoc('${escHtml(r.doc_id)}')" title="Delete">&times;</button>
+          </div>
+          <div style="width:100%;font-size:11px;color:#666;margin-top:2px;white-space:pre-wrap;word-break:break-word;">${escHtml(r.content.slice(0, 120))}...</div>
+        </div>
+      `).join('');
+    } catch (e) {
+      list.innerHTML = `<div style="text-align:center;color:#c00;padding:20px;font-size:13px;">${t('apiError')}</div>`;
+    }
+  }, 300);
+}
+
+async function deleteDoc(id) {
+  if (!confirm(t('deleteConfirm'))) return;
+  const res = await fetch('/api/documents/' + id, { method: 'DELETE' });
+  if (res.ok) {
+    showToast(t('docDeleted'));
+  } else {
+    showToast(t('uploadFailed'), 'error');
+  }
+  loadDocuments();
+}
+
+async function clearAllData() {
+  if (!confirm(t('clearAllConfirm'))) return;
+  await fetch('/api/data', { method: 'DELETE' });
+  chatHistory = [];
+  sessionId = uuidv4();
+  localStorage.setItem('sessionId', sessionId);
+  renderMessages();
+  showToast(t('allCleared'));
+  loadDocuments();
+}
+
+function cancelUpload() {
+  uploadCancelled = true;
+  $('progress-wrap').style.display = 'none';
+  showToast(t('cancel'), 'info');
+}
+
+async function handleFiles(files) {
+  if (!files || !files.length) return;
+  for (const file of files) {
+    await handleUpload(file);
+  }
+}
+
+async function handleUpload(file) {
+  if (!file) return;
+  uploadCancelled = false;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['txt', 'pdf', 'docx', 'md', 'csv'].includes(ext)) { showToast(t('onlyTxtPdf'), 'error'); return; }
+
+  const wrap = $('progress-wrap');
+  const fill = $('progress-fill');
+  const text = $('progress-text');
+  wrap.style.display = 'block';
+  fill.style.width = '0%';
+  text.textContent = t('uploadProgress') + ' 0%';
+
+  const form = new FormData();
+  form.append('file', file);
+
+  const xhr = new XMLHttpRequest();
+
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const pct = Math.round(e.loaded / e.total * 100);
+      fill.style.width = pct + '%';
+      text.textContent = t('uploadProgress') + ' ' + pct + '%';
+    }
+  };
+
+  xhr.onload = function() {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      const data = JSON.parse(xhr.responseText);
+      if (data.status === 'processing' && data.task_id) {
+        fill.style.width = '100%';
+        text.textContent = t('processing') + '...';
+        pollTaskStatus(data.task_id, data.filename);
+      } else {
+        finishUpload(data.filename, data.chunks || 0);
+      }
+    } else {
+      let msg = t('uploadFailed');
+      try { msg = JSON.parse(xhr.responseText).detail || msg; } catch {}
+      showToast(msg, 'error');
+      wrap.style.display = 'none';
+    }
+  };
+
+  xhr.onerror = function() {
+    showToast(t('uploadError'), 'error');
+    wrap.style.display = 'none';
+  };
+
+  xhr.open('POST', '/api/upload');
+  xhr.send(form);
+  $('file-input').value = '';
+}
+
+function pollTaskStatus(taskId, filename) {
+  const text = $('progress-text');
+  const wrap = $('progress-wrap');
+  const stages = { parsing: t('parsing'), chunking: t('chunking'), embedding: t('embedding') };
+  const MAX_RETRIES = 3600;
+  let retries = 0;
+  let cancelled = false;
+
+  const interval = setInterval(async () => {
+    if (uploadCancelled) { clearInterval(interval); return; }
+    retries++;
+    if (retries >= MAX_RETRIES) {
+      clearInterval(interval);
+      showToast(t('uploadTimeout'), 'error');
+      wrap.style.display = 'none';
+      return;
+    }
+    try {
+      const res = await fetch('/api/upload/status/' + taskId);
+      const data = await res.json();
+      if (data.status === 'done') {
+        clearInterval(interval);
+        finishUpload(data.filename, data.chunks);
+      } else if (data.status === 'error') {
+        clearInterval(interval);
+        showToast(data.error || t('uploadFailed'), 'error');
+        wrap.style.display = 'none';
+      } else {
+        text.textContent = stages[data.progress] || data.progress || t('processing') + '...';
+      }
+    } catch (e) {
+      clearInterval(interval);
+      showToast(t('uploadError'), 'error');
+      wrap.style.display = 'none';
+    }
+  }, 500);
+}
+
+function finishUpload(filename, chunks) {
+  const wrap = $('progress-wrap');
+  wrap.style.display = 'none';
+  showToast(`${t('uploaded')}: ${filename} (${chunks} ${t('chunksUnit')})`);
+  loadDocuments();
+}
+
+function renderMessages() {
+  const el = $('messages');
+  if (!chatHistory.length) {
+    el.innerHTML = `<div class="welcome"><div style="font-size:36px;margin-bottom:12px;">&#128218;</div><div>${t('welcomeTitle')}</div><div style="font-size:12px;margin-top:8px;color:#aaa;">${t('welcomeNote')}</div></div>`;
+    return;
+  }
+  el.innerHTML = chatHistory.map((msg, idx) => {
+    const cls = msg.role === 'user' ? 'user' : 'assistant';
+    let sourcesHtml = '';
+    if (msg.sources && msg.sources.length) {
+      sourcesHtml = `<div class="sources">${t('sources')}: ${msg.sources.map(s => `<span>${escHtml(s.filename)}</span>`).join('')}</div>`;
+    }
+    const contentHtml = msg.role === 'assistant' ? renderMarkdown(msg.content) : escHtml(msg.content);
+    const copyBtn = msg.role === 'assistant' && msg.content ? `<button class="copy-btn" onclick="copyMsg(${idx})" title="Copy">Copy</button>` : '';
+    return `<div class="msg ${cls}"><div class="bubble">${copyBtn}${contentHtml}</div>${sourcesHtml}</div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  if (typeof marked !== 'undefined' && marked.parse) {
+    try {
+      return marked.parse(text, { breaks: true, gfm: true });
+    } catch (e) {
+      return escHtml(text);
+    }
+  }
+  return escHtml(text);
+}
+
+function copyMsg(idx) {
+  const msg = chatHistory[idx];
+  if (!msg || !msg.content) return;
+  navigator.clipboard.writeText(msg.content).then(() => {
+    showToast('Copied');
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = msg.content;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('Copied');
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+}
+
+async function previewDoc(id) {
+  const title = $('preview-title');
+  const content = $('preview-content');
+  title.textContent = t('loading') + '...';
+  content.textContent = '';
+  $('preview-modal').style.display = 'flex';
+  try {
+    const res = await fetch('/api/documents/' + id + '/content');
+    const data = await res.json();
+    if (data.chunks && data.chunks.length) {
+      title.textContent = t('docPreview') + ' (' + data.chunks.length + ' ' + t('chunks') + ')';
+      content.textContent = data.chunks.map(c => c.content).join('\n\n---\n\n');
+    } else {
+      content.textContent = t('noDocs');
+    }
+  } catch (e) {
+    content.textContent = t('apiError') + ': ' + e.message;
+  }
+}
+
+function hidePreview() {
+  $('preview-modal').style.display = 'none';
+}
+
+function exportChat(format) {
+  if (!chatHistory.length) { showToast(t('noDocs'), 'error'); return; }
+  const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  const sid = sessionId.slice(0, 8);
+  if (format === 'json') {
+    const data = { session_id: sessionId, exported_at: new Date().toISOString(), messages: chatHistory };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, `chat-${sid}-${ts}.json`);
+  } else {
+    let md = `# Chat Export\nSession: ${sessionId}\nExported: ${new Date().toISOString()}\n\n---\n\n`;
+    chatHistory.forEach(msg => {
+      if (msg.role === 'user') {
+        md += `## User\n${msg.content}\n\n`;
+      } else {
+        md += `## Assistant\n${msg.content}\n\n`;
+        if (msg.sources && msg.sources.length) {
+          md += `### Sources\n${msg.sources.map(s => '- ' + s.filename).join('\n')}\n\n`;
+        }
+      }
+    });
+    const blob = new Blob([md], { type: 'text/markdown' });
+    downloadBlob(blob, `chat-${sid}-${ts}.md`);
+  }
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function askQuestion() {
+  const input = $('question-input');
+  const question = input.value.trim();
+  if (!question) return;
+  if (!isConfigured) { showConfig(); return; }
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  chatHistory.push({ role: 'user', content: question });
+  renderMessages();
+
+  const askBtn = $('ask-btn');
+  askBtn.disabled = true;
+  askBtn.textContent = '...';
+
+  chatHistory.push({ role: 'assistant', content: '', sources: [] });
+  const aiIdx = chatHistory.length - 1;
+  const msgEl = $('messages');
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'msg assistant';
+  typingDiv.id = 'typing-indicator';
+  typingDiv.innerHTML = '<div class="bubble"><div class="typing-indicator"><span></span><span></span><span></span></div></div>';
+  msgEl.appendChild(typingDiv);
+  msgEl.scrollTop = msgEl.scrollHeight;
+
+  try {
+    const res = await fetch('/api/ask/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ question, chat_history: chatHistory.slice(0, -2) })
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop();
+      for (const event of events) {
+        const lines = event.split('\n');
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.token) {
+              const ti = document.getElementById('typing-indicator');
+              if (ti) ti.remove();
+              fullText += data.token;
+              chatHistory[aiIdx].content = fullText;
+              renderMessages();
+            }
+            if (data.meta) {
+              chatHistory[aiIdx].sources = data.meta.sources || [];
+              chatHistory = data.meta.history;
+              renderMessages();
+            }
+            if (data.error) {
+              chatHistory[aiIdx].content = t('apiError') + ': ' + data.error;
+              renderMessages();
+            }
+          } catch {}
+        }
+      }
+    }
+    saveConversation();
+    loadSessions();
+  } catch (e) {
+    chatHistory[aiIdx].content = t('apiError') + ': ' + e.message;
+    renderMessages();
+  }
+
+  askBtn.disabled = false;
+  askBtn.textContent = t('send');
+  $('question-input').focus();
+}
+
+// Drag & drop
+const zone = $('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+
+// Auto-resize textarea
+$('question-input').addEventListener('input', function() {
+  const el = this;
+  el.style.height = 'auto';
+  requestAnimationFrame(() => {
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  });
+});
+
+// Session management
+function toggleSessionPanel() {
+  const panel = $('session-panel');
+  panel.classList.toggle('open');
+}
+
+async function loadSessions() {
+  try {
+    const res = await fetch('/api/sessions');
+    const data = await res.json();
+    const list = $('session-list');
+    const sessions = data.sessions || [];
+    if (!sessions.length) {
+      list.innerHTML = `<div style="text-align:center;color:#aaa;padding:20px;font-size:13px;">${t('noSessions')}</div>`;
+      return;
+    }
+    list.innerHTML = sessions.map(s => {
+      const active = s.id === sessionId ? ' active' : '';
+      const title = new Date(s.updated_at * 1000).toLocaleString();
+      return `<div class="session-item${active}" onclick="switchSession('${s.id}')">
+        <span class="session-title" title="${escHtml(title)}">${escHtml(title)}</span>
+        <button class="session-del" onclick="event.stopPropagation();deleteSession('${s.id}')" title="Delete">&times;</button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    console.error('Failed to load sessions:', e);
+  }
+}
+
+async function switchSession(sid) {
+  sessionId = sid;
+  localStorage.setItem('sessionId', sessionId);
+  await loadConversation();
+  loadSessions();
+  if (window.innerWidth <= 768) {
+    $('session-panel').classList.remove('open');
+  }
+}
+
+async function deleteSession(sid) {
+  if (!confirm(t('deleteConfirm'))) return;
+  await fetch('/api/sessions/' + sid, { method: 'DELETE' });
+  showToast(t('sessionDeleted'));
+  if (sid === sessionId) {
+    await newChat();
+  }
+  loadSessions();
+}
+
+// Init
+applyLang();
+checkConfig();
+loadDocuments();
+loadConversation();
+loadSessions();
+</script>
+</body>
+</html>

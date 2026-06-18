@@ -1,0 +1,15 @@
+chroma_db/
+uploads/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.env
+vector_store.db
+vector_store.db-shm
+vector_store.db-wal
+.pytest_cache/
+data/
+backups/
+*.log
