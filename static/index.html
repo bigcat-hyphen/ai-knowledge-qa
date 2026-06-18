@@ -203,7 +203,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; h
       No data is stored on external servers. All embeddings and documents remain on your local machine.
     </div>
     <label data-i18n="baseUrl">API Base URL</label>
-    <input id="cfg-base-url" placeholder="https://token-plan-cn.xiaomimimo.com/v1">
+    <input id="cfg-base-url" placeholder="https://api.example.com/v1">
     <label data-i18n="apiKey">API Key</label>
     <input id="cfg-api-key" type="password" placeholder="your-api-key">
     <label data-i18n="modelName">Model Name</label>
@@ -218,7 +218,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; h
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js" integrity="sha384-H+hy9ULve6xfxRkWIh/YOtvDdpXgV2fmAGQkIDTxIgZwNoaoBal14Di2YTMR6MzR" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous"></script>
 <script>
 const i18n = {
   zh: {
@@ -665,7 +666,11 @@ function renderMarkdown(text) {
   if (!text) return '';
   if (typeof marked !== 'undefined' && marked.parse) {
     try {
-      return marked.parse(text, { breaks: true, gfm: true });
+      const rawHtml = marked.parse(text, { breaks: true, gfm: true });
+      if (typeof DOMPurify !== 'undefined') {
+        return DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target'] });
+      }
+      return rawHtml;
     } catch (e) {
       return escHtml(text);
     }
@@ -868,11 +873,18 @@ async function loadSessions() {
     list.innerHTML = sessions.map(s => {
       const active = s.id === sessionId ? ' active' : '';
       const title = new Date(s.updated_at * 1000).toLocaleString();
-      return `<div class="session-item${active}" onclick="switchSession('${s.id}')">
+      const sid = escHtml(s.id);
+      return `<div class="session-item${active}" data-sid="${sid}">
         <span class="session-title" title="${escHtml(title)}">${escHtml(title)}</span>
-        <button class="session-del" onclick="event.stopPropagation();deleteSession('${s.id}')" title="Delete">&times;</button>
+        <button class="session-del" data-sid="${sid}" title="Delete">&times;</button>
       </div>`;
     }).join('');
+    list.querySelectorAll('.session-item').forEach(el => {
+      el.addEventListener('click', () => switchSession(el.dataset.sid));
+    });
+    list.querySelectorAll('.session-del').forEach(el => {
+      el.addEventListener('click', e => { e.stopPropagation(); deleteSession(el.dataset.sid); });
+    });
   } catch (e) {
     console.error('Failed to load sessions:', e);
   }

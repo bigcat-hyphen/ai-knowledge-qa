@@ -16,6 +16,12 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+_FTS_SPECIAL = re.compile(r'[^\w一-鿿\s]')
+
+
+def _sanitize_fts_term(term: str) -> str:
+    return _FTS_SPECIAL.sub('', term)
+
 DB_PATH = Path("vector_store.db")
 CONVERSATION_TTL = 86400 * 30  # 30 days
 CHUNK_SIZE = 500
@@ -452,7 +458,7 @@ def query_collection(question: str, model_config: dict = None, n_results: int = 
     with _get_db() as conn:
         q_emb = _embed(question, model_config)
 
-        fts_terms = [t for t in question.split() if len(t) > 1]
+        fts_terms = [_sanitize_fts_term(t) for t in question.split() if len(t) > 1]
         if fts_terms:
             fts_query = " OR ".join(fts_terms)
             try:
@@ -522,7 +528,7 @@ def get_document_content(doc_id: str) -> list[dict]:
 def search_documents(query: str, limit: int = 10) -> list[dict]:
     try:
         with _get_db() as conn:
-            fts_query = " OR ".join(query.split())
+            fts_query = " OR ".join(_sanitize_fts_term(t) for t in query.split() if t.strip())
             rows = conn.execute(
                 "SELECT doc_id, filename, chunk_index, content, rank FROM docs_fts WHERE docs_fts MATCH ? ORDER BY rank LIMIT ?",
                 (fts_query, limit)
